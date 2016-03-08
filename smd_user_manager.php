@@ -223,7 +223,6 @@ if (!defined('txpinterface'))
  * @author Stef Dawson
  * @link   http://stefdawson.com/
  */
-
 // TODO:
 //  -> Why does multi-edit fire twice? Is it still attached to the Admin->Users table?
 
@@ -266,6 +265,7 @@ if(@txpinterface === 'admin') {
 
     // Permit user self-editing
     $smd_um_grps = array_keys(smd_um_get_groups(0));
+
     unset($smd_um_grps[0]); // Remove None user
     $allprivs = join(',',$smd_um_grps);
     add_privs($smd_um_event, $allprivs); // Required to display anything at all on the User Manager tab
@@ -561,13 +561,43 @@ function smd_um($msg='') {
         $criteria = "ISNULL($search_method)";
     }
 
-    // The fields, joins and sub-queries that make up the real and computed columns
-    $fields = 'txu.user_id, txu.name, txu.RealName, txu.email, txu.privs, unix_timestamp(txu.last_access) as last_login, txp.total AS article_count, txi.total AS image_count, txf.total AS file_count, txl.total AS link_count';
-    $clause = ' FROM '.PFX.'txp_users as txu
-        LEFT JOIN (SELECT AuthorID, count(ID) AS total FROM '.PFX.'textpattern GROUP BY AuthorID) AS txp ON txp.AuthorID = txu.name
-        LEFT JOIN (SELECT author, count(id) AS total FROM '.PFX.'txp_image GROUP BY author) AS txi ON txi.author = txu.name
-        LEFT JOIN (SELECT author, count(id) AS total FROM '.PFX.'txp_file GROUP BY author) AS txf ON txf.author = txu.name
-        LEFT JOIN (SELECT author, count(id) AS total FROM '.PFX.'txp_link GROUP BY author) AS txl ON txl.author = txu.name';
+    // The fields that make up the real and computed columns
+    $fields = '
+        txu.user_id,
+        txu.name,
+        txu.RealName,
+        txu.email,
+        txu.privs,
+        unix_timestamp(txu.last_access) as last_login,
+        (
+            SELECT
+                count(*) AS total
+            FROM textpattern
+            WHERE AuthorID = txu.name
+            GROUP BY AuthorID
+        ) AS article_count,
+        (
+            SELECT
+                count(*) AS total
+            FROM txp_image
+            WHERE author = txu.name
+            GROUP BY author
+        ) AS image_count,
+        (
+            SELECT
+                count(*) AS total
+            FROM txp_file
+            WHERE author = txu.name
+            GROUP BY author
+        ) AS file_count,
+        (
+            SELECT
+                count(*) AS total
+            FROM txp_link
+            WHERE author = txu.name
+            GROUP BY author
+        ) AS link_count';
+    $clause = ' FROM '.PFX.'txp_users as txu';
 
     // Perform a count on the relevant search item. Doing a count(*) is awkward due to the computed columns
     // so a straight query is performed with a loop to increment the total. getThing() or getRows for some reason
